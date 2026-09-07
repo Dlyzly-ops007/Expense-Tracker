@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+
+# User's own financial data shouldn't be committed
+storage/*.csv
