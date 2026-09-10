@@ -87,6 +87,48 @@ class DataManagerTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             dm.add_transaction("income", 5, "Salary", "01-01-2026")
 
+    def test_filter_by_query_matches_category_and_note(self):
+        dm.add_transaction("expense", 20, "Food", "2026-01-01", "lunch")
+        dm.add_transaction("expense", 15, "Transport", "2026-01-02", "bus fare")
+        result = dm.filter_transactions(dm.load_transactions(), query="food")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].category, "Food")
+
+    def test_filter_by_query_is_case_insensitive(self):
+        dm.add_transaction("expense", 20, "Food", "2026-01-01", "Lunch out")
+        result = dm.filter_transactions(dm.load_transactions(), query="LUNCH")
+        self.assertEqual(len(result), 1)
+
+    def test_filter_by_query_no_match_returns_empty(self):
+        dm.add_transaction("expense", 20, "Food", "2026-01-01", "lunch")
+        result = dm.filter_transactions(dm.load_transactions(), query="zzz-nomatch")
+        self.assertEqual(result, [])
+
+    def test_filter_combines_type_category_and_date(self):
+        dm.add_transaction("expense", 20, "Food", "2026-01-15")
+        dm.add_transaction("expense", 30, "Food", "2026-02-15")
+        dm.add_transaction("income", 100, "Food", "2026-01-15")
+        result = dm.filter_transactions(
+            dm.load_transactions(), type_="expense", category="Food",
+            start_date="2026-01-01", end_date="2026-01-31",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].amount, 20)
+
+    def test_get_categories_returns_sorted_unique(self):
+        dm.add_transaction("expense", 10, "Transport", "2026-01-01")
+        dm.add_transaction("expense", 10, "Food", "2026-01-01")
+        dm.add_transaction("expense", 10, "food", "2026-01-01")
+        categories = dm.get_categories(dm.load_transactions())
+        self.assertEqual(categories, sorted(categories, key=str.lower))
+        self.assertIn("Transport", categories)
+
+    def test_current_month_range_brackets_today(self):
+        start, end = dm.current_month_range()
+        today = dm.date.today().isoformat()
+        self.assertLessEqual(start, today)
+        self.assertLessEqual(today, end)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import os
 import uuid
+from datetime import date, timedelta
 from typing import Optional
 
 from models import (
@@ -124,22 +125,63 @@ def get_transactions(
     category: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    query: Optional[str] = None,
 ) -> list[Transaction]:
-    """Retrieve transactions, optionally filtered by type/category/date range.
-
-    Filtering here (rather than only in the UI) means future features
-    like monthly summaries or search can reuse this without duplicating logic.
+    """Load all transactions from disk, optionally filtered. Convenience wrapper
+    around filter_transactions() for callers that don't already have a list
+    in memory (e.g. the CLI).
     """
-    transactions = load_transactions()
+    return filter_transactions(
+        load_transactions(), type_=type_, category=category,
+        start_date=start_date, end_date=end_date, query=query,
+    )
+
+
+def filter_transactions(
+    transactions: list[Transaction],
+    *,
+    type_: Optional[str] = None,
+    category: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    query: Optional[str] = None,
+) -> list[Transaction]:
+    """Filter an already-loaded list of transactions. Never touches disk.
+
+    This is the single place filtering logic lives, so the GUI's search bar,
+    date-range filter, and category filter can all be combined here instead
+    of being reimplemented (or duplicated) in gui.py.
+    """
+    result = transactions
     if type_:
-        transactions = [t for t in transactions if t.type == type_]
+        result = [t for t in result if t.type == type_]
     if category:
-        transactions = [t for t in transactions if t.category.lower() == category.lower()]
+        result = [t for t in result if t.category.lower() == category.lower()]
     if start_date:
-        transactions = [t for t in transactions if t.date >= start_date]
+        result = [t for t in result if t.date >= start_date]
     if end_date:
-        transactions = [t for t in transactions if t.date <= end_date]
-    return transactions
+        result = [t for t in result if t.date <= end_date]
+    if query and query.strip():
+        q = query.strip().lower()
+        result = [t for t in result if q in t.category.lower() or q in t.note.lower() or q in t.type.lower()]
+    return result
+
+
+def get_categories(transactions: list[Transaction]) -> list[str]:
+    """Return the distinct categories actually present in the given transactions, sorted."""
+    return sorted({t.category for t in transactions}, key=str.lower)
+
+
+def current_month_range() -> tuple[str, str]:
+    """Return (first_day, last_day) of the current calendar month as ISO date strings."""
+    today = date.today()
+    start = today.replace(day=1)
+    if start.month == 12:
+        next_month_start = start.replace(year=start.year + 1, month=1)
+    else:
+        next_month_start = start.replace(month=start.month + 1)
+    end = next_month_start - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
 
 
 def calculate_total(transactions: list[Transaction], type_: str) -> float:
